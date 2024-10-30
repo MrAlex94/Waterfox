@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from telnetlib import Telnet
+import socket
 
 from mozdevice import ADBHost
 from mozprocess import ProcessHandler
@@ -19,6 +19,25 @@ from .emulator_battery import EmulatorBattery
 from .emulator_geo import EmulatorGeo
 from .emulator_screen import EmulatorScreen
 
+class TelnetConnection:
+    def __init__(self, host, port):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((host, port))
+
+    def write(self, data):
+        self.sock.sendall(data.encode('ascii'))
+
+    def read_until(self, delimiter):
+        buffer = []
+        while True:
+            chunk = self.sock.recv(1024).decode('ascii')
+            buffer.append(chunk)
+            if delimiter in chunk:
+                break
+        return ''.join(buffer)
+
+    def close(self):
+        self.sock.close()
 
 class ArchContext(object):
     def __init__(self, arch, context, binary=None, avd=None, extra_args=None):
@@ -189,14 +208,14 @@ class BaseEmulator(Device):
 
     def _run_telnet(self, command):
         if not self.telnet:
-            self.telnet = Telnet("localhost", self.port)
+            self.telnet = TelnetConnection('localhost', self.port)
             self._get_telnet_response()
         return self._get_telnet_response(command)
 
     def __del__(self):
         if self.telnet:
             self.telnet.write("exit\n")
-            self.telnet.read_all()
+            self.telnet.close()
 
 
 class EmulatorAVD(BaseEmulator):
